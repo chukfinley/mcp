@@ -1,5 +1,6 @@
 import { z } from "zod";
 import apiClient from "../../../utils/apiClient.js";
+import { fetchContainerLogs } from "../../../utils/wsClient.js";
 import { createTool } from "../toolFactory.js";
 import { ResponseFormatter } from "../../../utils/responseFormatter.js";
 
@@ -16,24 +17,27 @@ export const composeLogs = createTool({
       .string()
       .optional()
       .describe(
-        "The name of a specific service within the compose stack. If not specified, returns logs from all services."
+        "The name of a specific service within the compose stack. If not specified, returns logs from the main compose container."
       ),
     tail: z
       .number()
       .optional()
+      .default(100)
       .describe(
-        "Number of lines to return from the end of the log. Defaults to 100 if not specified."
+        "Number of lines to return from the end of the log. Defaults to 100."
       ),
     since: z
       .string()
       .optional()
+      .default("all")
       .describe(
-        "Only return logs since this time. Can be a duration (e.g., '1h', '30m', '2h30m') or a timestamp. Defaults to all logs."
+        "Only return logs since this time. Can be a duration (e.g., '1h', '30m') or 'all' for all logs."
       ),
-    timestamps: z
-      .boolean()
+    search: z
+      .string()
       .optional()
-      .describe("Whether to include timestamps in the log output. Defaults to true."),
+      .default("")
+      .describe("Filter logs by search term (case-insensitive)."),
   }),
   annotations: {
     title: "Read Compose Service Logs",
@@ -42,40 +46,66 @@ export const composeLogs = createTool({
     openWorldHint: true,
   },
   handler: async (input) => {
-    const params = new URLSearchParams({
-      composeId: input.composeId,
-    });
-
-    if (input.serviceName !== undefined) {
-      params.append("serviceName", input.serviceName);
-    }
-
-    if (input.tail !== undefined) {
-      params.append("tail", input.tail.toString());
-    }
-
-    if (input.since !== undefined) {
-      params.append("since", input.since);
-    }
-
-    if (input.timestamps !== undefined) {
-      params.append("timestamps", input.timestamps.toString());
-    }
-
-    const response = await apiClient.get(
-      `/compose.readLogs?${params.toString()}`
+    // Get the compose stack info
+    const composeResponse = await apiClient.get(
+      `/compose.one?composeId=${input.composeId}`
     );
 
-    if (!response?.data) {
+    if (!composeResponse?.data) {
       return ResponseFormatter.error(
-        "Failed to fetch compose logs",
-        `Could not retrieve logs for compose "${input.composeId}"`
+        "Failed to fetch compose stack",
+        `Compose stack with ID "${input.composeId}" not found`
       );
     }
 
-    return ResponseFormatter.success(
-      `Successfully fetched logs for compose "${input.composeId}"`,
-      response.data
-    );
+    const appName = composeResponse.data.appName;
+    if (!appName) {
+      return ResponseFormatter.error(
+        "Compose stack has no container",
+        `Compose stack "${input.composeId}" does not have a running container`
+      );
+    }
+
+    // Build the container name
+    // For compose services, the container name is typically: appName-serviceName-1
+    // If no service name specified, use the appName directly
+    let containerId = appName;
+    if (input.serviceName) {
+      containerId = `${appName}-${input.serviceName}-1`;
+    }
+
+    try {
+      // Fetch logs via WebSocket
+      const logs = await fetchContainerLogs({
+        containerId,
+        tail: input.tail,
+        since: input.since,
+        search: input.search,
+        timeout: 10000,
+      });
+
+      if (!logs || logs.trim() === "") {
+        return ResponseFormatter.success(
+          `No logs found for compose "${composeResponse.data.name}"${input.serviceName ? ` service "${input.serviceName}"` : ""}`,
+          { logs: "(no logs available)", containerId }
+        );
+      }
+
+      return ResponseFormatter.success(
+        `Successfully fetched logs for compose "${composeResponse.data.name}"${input.serviceName ? ` service "${input.serviceName}"` : ""}`,
+        {
+          logs,
+          containerId,
+          composeName: composeResponse.data.name,
+          serviceName: input.serviceName,
+          lineCount: logs.split("\n").length,
+        }
+      );
+    } catch (error) {
+      return ResponseFormatter.error(
+        "Failed to fetch compose logs",
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   },
 });

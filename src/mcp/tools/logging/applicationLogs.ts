@@ -1,5 +1,6 @@
 import { z } from "zod";
 import apiClient from "../../../utils/apiClient.js";
+import { fetchContainerLogs } from "../../../utils/wsClient.js";
 import { createTool } from "../toolFactory.js";
 import { ResponseFormatter } from "../../../utils/responseFormatter.js";
 
@@ -15,19 +16,22 @@ export const applicationLogs = createTool({
     tail: z
       .number()
       .optional()
+      .default(100)
       .describe(
-        "Number of lines to return from the end of the log. Defaults to 100 if not specified."
+        "Number of lines to return from the end of the log. Defaults to 100."
       ),
     since: z
       .string()
       .optional()
+      .default("all")
       .describe(
-        "Only return logs since this time. Can be a duration (e.g., '1h', '30m', '2h30m') or a timestamp. Defaults to all logs."
+        "Only return logs since this time. Can be a duration (e.g., '1h', '30m') or 'all' for all logs."
       ),
-    timestamps: z
-      .boolean()
+    search: z
+      .string()
       .optional()
-      .describe("Whether to include timestamps in the log output. Defaults to true."),
+      .default("")
+      .describe("Filter logs by search term (case-insensitive)."),
   }),
   annotations: {
     title: "Read Application Container Logs",
@@ -36,36 +40,52 @@ export const applicationLogs = createTool({
     openWorldHint: true,
   },
   handler: async (input) => {
-    const params = new URLSearchParams({
-      applicationId: input.applicationId,
-    });
-
-    if (input.tail !== undefined) {
-      params.append("tail", input.tail.toString());
-    }
-
-    if (input.since !== undefined) {
-      params.append("since", input.since);
-    }
-
-    if (input.timestamps !== undefined) {
-      params.append("timestamps", input.timestamps.toString());
-    }
-
-    const response = await apiClient.get(
-      `/application.readLogs?${params.toString()}`
+    // First, get the application to find its appName (container name)
+    const appResponse = await apiClient.get(
+      `/application.one?applicationId=${input.applicationId}`
     );
 
-    if (!response?.data) {
+    if (!appResponse?.data) {
       return ResponseFormatter.error(
-        "Failed to fetch application logs",
-        `Could not retrieve logs for application "${input.applicationId}"`
+        "Failed to fetch application",
+        `Application with ID "${input.applicationId}" not found`
       );
     }
 
-    return ResponseFormatter.success(
-      `Successfully fetched logs for application "${input.applicationId}"`,
-      response.data
-    );
+    const appName = appResponse.data.appName;
+    if (!appName) {
+      return ResponseFormatter.error(
+        "Application has no container",
+        `Application "${input.applicationId}" does not have a running container`
+      );
+    }
+
+    try {
+      // Fetch logs via WebSocket
+      const logs = await fetchContainerLogs({
+        containerId: appName,
+        tail: input.tail,
+        since: input.since,
+        search: input.search,
+        timeout: 10000,
+      });
+
+      if (!logs || logs.trim() === "") {
+        return ResponseFormatter.success(
+          `No logs found for application "${appResponse.data.name}"`,
+          { logs: "(no logs available)", appName }
+        );
+      }
+
+      return ResponseFormatter.success(
+        `Successfully fetched logs for application "${appResponse.data.name}"`,
+        { logs, appName, lineCount: logs.split("\n").length }
+      );
+    } catch (error) {
+      return ResponseFormatter.error(
+        "Failed to fetch application logs",
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   },
 });

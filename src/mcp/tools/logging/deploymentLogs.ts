@@ -1,5 +1,6 @@
 import { z } from "zod";
 import apiClient from "../../../utils/apiClient.js";
+import { fetchDeploymentLogs } from "../../../utils/wsClient.js";
 import { createTool } from "../toolFactory.js";
 import { ResponseFormatter } from "../../../utils/responseFormatter.js";
 
@@ -8,15 +9,15 @@ export const deploymentLogs = createTool({
   description:
     "Reads the build/deployment logs for a specific deployment in Dokploy. Returns the log content from the deployment process.",
   schema: z.object({
-    deploymentId: z
+    applicationId: z
       .string()
       .min(1)
-      .describe("The ID of the deployment to retrieve logs for."),
-    tail: z
-      .number()
+      .describe("The ID of the application to get deployment logs for."),
+    deploymentId: z
+      .string()
       .optional()
       .describe(
-        "Number of lines to return from the end of the log. If not specified, returns all logs."
+        "The ID of a specific deployment. If not provided, gets logs from the most recent deployment."
       ),
   }),
   annotations: {
@@ -26,28 +27,86 @@ export const deploymentLogs = createTool({
     openWorldHint: true,
   },
   handler: async (input) => {
-    const params = new URLSearchParams({
-      deploymentId: input.deploymentId,
-    });
-
-    if (input.tail !== undefined) {
-      params.append("tail", input.tail.toString());
-    }
-
-    const response = await apiClient.get(
-      `/deployment.readLogs?${params.toString()}`
+    // Get the application with its deployments
+    const appResponse = await apiClient.get(
+      `/application.one?applicationId=${input.applicationId}`
     );
 
-    if (!response?.data) {
+    if (!appResponse?.data) {
       return ResponseFormatter.error(
-        "Failed to fetch deployment logs",
-        `Could not retrieve logs for deployment "${input.deploymentId}"`
+        "Failed to fetch application",
+        `Application with ID "${input.applicationId}" not found`
       );
     }
 
-    return ResponseFormatter.success(
-      `Successfully fetched logs for deployment "${input.deploymentId}"`,
-      response.data
-    );
+    const deployments = appResponse.data.deployments;
+    if (!deployments || deployments.length === 0) {
+      return ResponseFormatter.error(
+        "No deployments found",
+        `Application "${appResponse.data.name}" has no deployments`
+      );
+    }
+
+    // Find the specific deployment or use the most recent one
+    let deployment;
+    if (input.deploymentId) {
+      deployment = deployments.find(
+        (d: { deploymentId: string }) => d.deploymentId === input.deploymentId
+      );
+      if (!deployment) {
+        return ResponseFormatter.error(
+          "Deployment not found",
+          `Deployment "${input.deploymentId}" not found in application "${appResponse.data.name}"`
+        );
+      }
+    } else {
+      // Get the most recent deployment (first in the array)
+      deployment = deployments[0];
+    }
+
+    const logPath = deployment.logPath;
+    if (!logPath) {
+      return ResponseFormatter.error(
+        "No log path available",
+        `Deployment "${deployment.deploymentId}" does not have a log path`
+      );
+    }
+
+    try {
+      // Fetch logs via WebSocket
+      const logs = await fetchDeploymentLogs({
+        logPath,
+        timeout: 10000,
+      });
+
+      if (!logs || logs.trim() === "") {
+        return ResponseFormatter.success(
+          `No logs found for deployment "${deployment.deploymentId}"`,
+          {
+            logs: "(no logs available)",
+            deploymentId: deployment.deploymentId,
+            status: deployment.status,
+            title: deployment.title,
+          }
+        );
+      }
+
+      return ResponseFormatter.success(
+        `Successfully fetched logs for deployment "${deployment.deploymentId}"`,
+        {
+          logs,
+          deploymentId: deployment.deploymentId,
+          status: deployment.status,
+          title: deployment.title,
+          createdAt: deployment.createdAt,
+          lineCount: logs.split("\n").length,
+        }
+      );
+    } catch (error) {
+      return ResponseFormatter.error(
+        "Failed to fetch deployment logs",
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
   },
 });
