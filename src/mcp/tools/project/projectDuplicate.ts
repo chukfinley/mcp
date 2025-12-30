@@ -37,7 +37,7 @@ export const projectDuplicate = createTool({
       .describe("An optional description for the duplicated environment."),
     includeServices: z
       .boolean()
-      .default(true)
+      
       .describe(
         "Whether to include services in the duplication. Defaults to true."
       ),
@@ -49,7 +49,7 @@ export const projectDuplicate = createTool({
       ),
     duplicateInSameProject: z
       .boolean()
-      .default(false)
+      
       .describe(
         "Whether to duplicate the environment within the same project. Defaults to false."
       ),

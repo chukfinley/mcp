@@ -19,17 +19,9 @@ export const mysqlCreate = createTool({
       .describe("The username for database access."),
     databasePassword: z
       .string()
-      .regex(
-        /^[a-zA-Z0-9@#%^&*()_+\-=[\]{}|;:,.<>?~`]*$/,
-        "Password contains invalid characters"
-      )
       .describe("The password for database access."),
     databaseRootPassword: z
       .string()
-      .regex(
-        /^[a-zA-Z0-9@#%^&*()_+\-=[\]{}|;:,.<>?~`]*$/,
-        "Root password contains invalid characters"
-      )
       .describe("The root password for MySQL."),
     environmentId: z
       .string()
@@ -39,7 +31,7 @@ export const mysqlCreate = createTool({
     dockerImage: z
       .string()
       .optional()
-      .default("mysql:8")
+      
       .describe("Docker image to use for MySQL."),
     description: z
       .string()

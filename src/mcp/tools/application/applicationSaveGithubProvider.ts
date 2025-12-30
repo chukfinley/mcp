@@ -37,7 +37,7 @@ export const applicationSaveGithubProvider = createTool({
     triggerType: z
       .enum(["push", "tag"])
       .optional()
-      .default("push")
+      
       .describe("The trigger type for deployments."),
   }),
   annotations: {

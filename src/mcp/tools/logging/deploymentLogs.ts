@@ -12,12 +12,6 @@ export const deploymentLogs = createTool({
     applicationId: z
       .string()
       .describe("The ID of the application to get deployment logs for."),
-    deploymentId: z
-      .string()
-      .optional()
-      .describe(
-        "The ID of a specific deployment. If not provided, gets logs from the most recent deployment."
-      ),
   }),
   annotations: {
     title: "Read Deployment Logs",
@@ -46,22 +40,8 @@ export const deploymentLogs = createTool({
       );
     }
 
-    // Find the specific deployment or use the most recent one
-    let deployment;
-    if (input.deploymentId) {
-      deployment = deployments.find(
-        (d: { deploymentId: string }) => d.deploymentId === input.deploymentId
-      );
-      if (!deployment) {
-        return ResponseFormatter.error(
-          "Deployment not found",
-          `Deployment "${input.deploymentId}" not found in application "${appResponse.data.name}"`
-        );
-      }
-    } else {
-      // Get the most recent deployment (first in the array)
-      deployment = deployments[0];
-    }
+    // Get the most recent deployment (first in the array)
+    const deployment = deployments[0];
 
     const logPath = deployment.logPath;
     if (!logPath) {

@@ -38,24 +38,16 @@ export const mysqlUpdate = createTool({
       .describe("The username for database access."),
     databasePassword: z
       .string()
-      .regex(
-        /^[a-zA-Z0-9@#%^&*()_+\-=[\]{}|;:,.<>?~`]*$/,
-        "Password contains invalid characters"
-      )
       .optional()
       .describe("The password for database access."),
     databaseRootPassword: z
       .string()
-      .regex(
-        /^[a-zA-Z0-9@#%^&*()_+\-=[\]{}|;:,.<>?~`]*$/,
-        "Root password contains invalid characters"
-      )
       .optional()
       .describe("The root password for MySQL."),
     dockerImage: z
       .string()
       .optional()
-      .default("mysql:8")
+      
       .describe("Docker image to use for MySQL."),
     command: z
       .string()

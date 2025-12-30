@@ -32,7 +32,6 @@ export const postgresUpdate = createTool({
       .describe("The new database username."),
     databasePassword: z
       .string()
-      .regex(/^[a-zA-Z0-9@#%^&*()_+\-=[\]{}|;:,.<>?~`]*$/)
       .optional()
       .describe("The new database password."),
     description: z
@@ -42,7 +41,7 @@ export const postgresUpdate = createTool({
       .describe("The new description for the PostgreSQL database."),
     dockerImage: z
       .string()
-      .default("postgres:15")
+      
       .optional()
       .describe("The new Docker image for PostgreSQL."),
     command: z
