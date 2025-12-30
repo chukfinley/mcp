@@ -22,21 +22,18 @@ export const composeLogs = createTool({
     tail: z
       .number()
       .optional()
-      .default(100)
       .describe(
-        "Number of lines to return from the end of the log. Defaults to 100."
+        "Number of lines to return from the end of the log. Defaults to 100 if not specified."
       ),
     since: z
       .string()
       .optional()
-      .default("all")
       .describe(
-        "Only return logs since this time. Can be a duration (e.g., '1h', '30m') or 'all' for all logs."
+        "Only return logs since this time. Can be a duration (e.g., '1h', '30m') or 'all' for all logs. Defaults to 'all'."
       ),
     search: z
       .string()
       .optional()
-      .default("")
       .describe("Filter logs by search term (case-insensitive)."),
   }),
   annotations: {
@@ -78,9 +75,9 @@ export const composeLogs = createTool({
       // Fetch logs via WebSocket
       const logs = await fetchContainerLogs({
         containerId,
-        tail: input.tail,
-        since: input.since,
-        search: input.search,
+        tail: input.tail ?? 100,
+        since: input.since ?? "all",
+        search: input.search ?? "",
         timeout: 10000,
       });
 
