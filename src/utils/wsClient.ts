@@ -45,7 +45,7 @@ export async function fetchLogsViaWebSocket(
 
     const ws = new WebSocket(fullUrl, {
       headers: {
-        Cookie: `better-auth.session_token=${config.authToken}`,
+        "x-api-key": config.authToken,
       },
     });
 
@@ -108,7 +108,8 @@ export async function fetchContainerLogs(options: {
   search?: string;
   timeout?: number;
 }): Promise<string> {
-  const { containerId, tail = 100, since = "all", search = "", timeout = 5000 } = options;
+  // Default to 24h for swarm mode (requires valid duration format)
+  const { containerId, tail = 100, since = "24h", search = "", timeout = 5000 } = options;
 
   return fetchLogsViaWebSocket({
     endpoint: "docker-container-logs",
@@ -117,7 +118,8 @@ export async function fetchContainerLogs(options: {
       tail: tail.toString(),
       since,
       search,
-      runType: "native",
+      // Use swarm mode for Dokploy deployments
+      runType: "swarm",
     },
     timeout,
     maxLines: tail,

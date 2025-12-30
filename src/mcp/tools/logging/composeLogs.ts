@@ -43,12 +43,10 @@ export const composeLogs = createTool({
     const containerId = appName;
 
     try {
-      // Fetch logs via WebSocket
+      // Fetch logs via WebSocket (uses swarm mode with 24h default)
       const logs = await fetchContainerLogs({
         containerId,
         tail: 100,
-        since: "all",
-        search: "",
         timeout: 10000,
       });
 
