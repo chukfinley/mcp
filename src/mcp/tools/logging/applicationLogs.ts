@@ -11,7 +11,6 @@ export const applicationLogs = createTool({
   schema: z.object({
     applicationId: z
       .string()
-      .min(1)
       .describe("The ID of the application to retrieve logs for."),
     tail: z
       .number()

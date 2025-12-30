@@ -11,7 +11,6 @@ export const composeLogs = createTool({
   schema: z.object({
     composeId: z
       .string()
-      .min(1)
       .describe("The ID of the compose stack to retrieve logs for."),
     serviceName: z
       .string()

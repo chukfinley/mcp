@@ -11,7 +11,6 @@ export const deploymentLogs = createTool({
   schema: z.object({
     applicationId: z
       .string()
-      .min(1)
       .describe("The ID of the application to get deployment logs for."),
     deploymentId: z
       .string()
